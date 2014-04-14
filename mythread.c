@@ -2,7 +2,7 @@
 
 //  static int start = 1;
 int next_tid = 1, start = 1;
-myqueue *runnable_q = NULL, *sleeping_q = NULL;
+myqueue *runnable_q = NULL, *sleeping_q = NULL, finished_q = NULL;
 mythread *cur_mythread;
 
 
@@ -47,6 +47,8 @@ int mythread_create(int *mythread_id, const mythread_attr_t *attr, void (*start_
         runnable_q -> num = 0;
         sleeping_q -> front = sleeping_q -> front = (myqueue *) malloc(myqueue);
         sleeping_q -> num = 0;
+        finished_q -> front = finished_q -> front = (myqueue *) malloc(myqueue);
+        finished_q -> num = 0;
         start = 0;
     }
     
@@ -58,7 +60,7 @@ int mythread_create(int *mythread_id, const mythread_attr_t *attr, void (*start_
     }
     
     if(mythread_attr_t == NULL)
-        my_thread_attr_t.joinable = 1;          // Joinable by default
+        t -> attr -> joinable = 1;          // Joinable by default
         
     add_runnable_q(t, runnable_q);              // Add thread to RUNNABLE QUEUE
     t -> state = RUNNABLE;
@@ -107,18 +109,85 @@ void add_runnable(struct mythread *thread, myqueue *queue)
 
 void mythread_exit(void *retval)
 {
-    mythread *temp;
-    
     cur_mythread -> retval = retval;
     cur_mythread -> status = KILLED;
+    add_runnable(cur_mythread, finished_q);
     next_tid--;
     
-    temp = cur_mythread;
-    cur_mythread = get_thread();
+    cur_mythread = get_thread(runnable_q);
     cur_mythread -> status = RUNNING;
     
-    swapcontext(temp -> context, cur_mythread -> context);
+    swapcontext(finished_q -> tail -> context, cur_mythread -> context);
 }
+
+
+int mythread_yield()
+{
+    if(context_switch() == -1)
+    {
+        printf("\nCannot yield");
+        return -1;
+    }
+    
+    return 0;
+}
+
+
+int context_switch()
+{
+    if(runnable_q -> num == 0)
+    {
+        printf("No threads available to yield");
+        return -1;
+    }
+    
+    add_runnable(cur_mythread, runnable_q);
+    cur_mythread -> state = RUNNABLE;
+    cur_mythread = get_thread(runnable_q);
+    cur_mythread -> state = RUNNING;
+    
+    swappcontext(runnable_q -> rear -> mytcb -> context, cur_mythread -> context);
+    
+    return 0;
+}
+
+
+mythread *get_thread(myqueue *queue)
+{
+    mythread *temp = queue -> front;
+    queue -> front = queue -> front -> mythread_queue_next;
+    queue -> num--;
+    
+    return temp;
+}
+
+
+int mythread_join(int mythread_id, void **retval)
+{
+    mynode *temp;
+    
+    while(! (temp = inFinishedQueue(mythread_id)))
+        mythread_yield();
+        
+    if(retval != NULL)
+        *retval = temp -> mytcb -> retval;
+    finished_q -> num--;
+    remove_node(temp);
+    
+    return 0;
+}
+
+
+void remove_node(myqueue *node)
+{
+    free(node -> tcb -> context -> uc_stack.ss);
+    free(node -> tcb -> context);
+    free(node);
+}
+
+
+
+
 
 
 
