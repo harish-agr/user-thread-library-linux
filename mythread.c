@@ -1,7 +1,7 @@
 #include "mythread.h"
 
 //  static int start = 1;
-int next_tid = 1;
+int next_tid = 1, start = 1;
 myqueue *runnable_q = NULL, *sleeping_q = NULL, cur_mythread;
 
 
@@ -11,14 +11,6 @@ void add_runnable(struct mythread *, myqueue *);
 
 struct mythread *mythread_init(void)
 {
-    start = 0;
-    runnable_q = (myqueue *) malloc(myqueue);
-    runnable_q -> n = 0;
-    sleeping_q = (myqueue *) malloc(myqueue);
-    sleeping_q -> n = 0;
-    running_q = (myqueue *) malloc(myqueue);
-    running_q -> n = 0;
-    
     struct mythread *t = (tcb *) malloc(sizeof(mythread));
     
     t -> state = EMBRYO;
@@ -36,6 +28,17 @@ struct mythread *mythread_init(void)
 
 int mythread_create(int *mythread_id, const mythread_attr_t *attr, void (*start_routine) (void *), void *arg)
 {
+    mynode *t_mynode = (mynode *) malloc(sizeof(mynode));
+    
+    if(start)
+    {
+        runnable_q -> front = runnable_q -> front = (myqueue *) malloc(myqueue);
+        runnable_q -> num = 0;
+        sleeping_q -> front = sleeping_q -> front = (myqueue *) malloc(myqueue);
+        sleeping_q -> num = 0;
+        start = 0;
+    }
+    
     mythread *t = mythread_init();
     if(t == NULL)
     {
@@ -53,12 +56,19 @@ int mythread_create(int *mythread_id, const mythread_attr_t *attr, void (*start_
     {
         printf("\nCannot switch to newly created thread");
         t -> state = KILLED;
+        return -1;
     }
+    t_mynode -> mytcb = t;
+    t_mynode -> mythread_queue_next = NULL;
+    mythread_id = t -> tid;
     
     cur_mythread -> status = RUNNABLE;
     add_runnable_q(cur_mythread, runnable_q);
     cur_mythread = t;
+    t -> status = RUNNING;
     swapcontext(runnable_q -> front -> mytcb -> context, cur_mythread -> mytcb -> context);
+    
+    return 0;
 }
 
 
@@ -69,10 +79,17 @@ void add_runnable(struct mythread *thread, myqueue *queue)
     queue = (myqueue *) malloc(sizeof(myqueue));
     
     if(queue -> num == 0)           //  Queue is empty
-        queue -> front = queue -> rear = thread;
+    {
+        queue -> front -> mythread_queue_next = NULL;
+        queue -> front = thread;
+        queue -> num++;
+        queue -> front = queue -> rear;
+    }
+        
     else
-        queue -> rear = thread;
-    
+        queue -> rear -> mytcb = thread;
+        
+    queue -> num++;
     mythread_mutex_unlock(& queue -> lock);
 }
 
