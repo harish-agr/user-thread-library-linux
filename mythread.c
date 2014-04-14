@@ -2,11 +2,21 @@
 
 //  static int start = 1;
 int next_tid = 1, start = 1;
-myqueue *runnable_q = NULL, *sleeping_q = NULL, cur_mythread;
+myqueue *runnable_q = NULL, *sleeping_q = NULL;
+mythread *cur_mythread;
 
 
 
 void add_runnable(struct mythread *, myqueue *);
+
+
+void *wrapper_function(void *function (void *), void *arg)
+{
+    void *ret = function(arg);
+    mythread_exit(ret);
+    
+    return 0;
+}
 
 
 struct mythread *mythread_init(void)
@@ -25,6 +35,7 @@ struct mythread *mythread_init(void)
     
     return t;
 }
+
 
 int mythread_create(int *mythread_id, const mythread_attr_t *attr, void (*start_routine) (void *), void *arg)
 {
@@ -93,6 +104,21 @@ void add_runnable(struct mythread *thread, myqueue *queue)
     mythread_mutex_unlock(& queue -> lock);
 }
 
+
+void mythread_exit(void *retval)
+{
+    mythread *temp;
+    
+    cur_mythread -> retval = retval;
+    cur_mythread -> status = KILLED;
+    next_tid--;
+    
+    temp = cur_mythread;
+    cur_mythread = get_thread();
+    cur_mythread -> status = RUNNING;
+    
+    swapcontext(temp -> context, cur_mythread -> context);
+}
 
 
 
